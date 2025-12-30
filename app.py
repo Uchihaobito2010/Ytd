@@ -1,99 +1,113 @@
-from flask import Flask, request, jsonify
-import subprocess, json, tempfile, os
+from flask import Flask, request, jsonify as Aotpyijson
+import requests as Aotpyr
+import re as Aotpyre
 
 app = Flask(__name__)
 
-CREDITS = "API by @Aotpy | https://aotpy.vercel.app"
-ADMIN = "@Aotpy"
-WEBSITE = "https://aotpy.vercel.app"
-
-
-def fetch_instagram(url):
+def Aotpy_shorten_url(Aotpyurl):
+    if not Aotpyurl:
+        return Aotpyurl
     try:
-        with tempfile.TemporaryDirectory() as tmp:
-            cmd = [
-                "yt-dlp",
-                "--dump-json",
-                "--no-warnings",
-                "--no-playlist",
-                url
-            ]
+        Aotpyres = Aotpyr.post(
+            "https://freelyshrink.com/shorten.php",
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            data={"long_url": Aotpyurl},
+            timeout=15
+        )
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
+        if "code=" in Aotpyres.url:
+            Aotpycode = Aotpyres.url.split("code=")[1].split("&")[0]
+            return f"https://hosturl.link/{Aotpycode}"
 
-            if result.returncode != 0:
-                return None, "Failed to extract media"
+        Aotpymatch = Aotpyre.search(r'code=([a-zA-Z0-9]+)', Aotpyres.text)
+        if Aotpymatch:
+            return f"https://hosturl.link/{Aotpymatch.group(1)}"
 
-            data = json.loads(result.stdout)
+    except:
+        pass
 
-            media = []
-
-            if "url" in data:
-                media.append({
-                    "type": "video",
-                    "url": data["url"]
-                })
-
-            for f in data.get("formats", []):
-                if f.get("url") and f.get("ext") in ["mp4", "jpg", "png"]:
-                    media.append({
-                        "type": "video" if f["ext"] == "mp4" else "image",
-                        "url": f["url"]
-                    })
-
-            if not media:
-                return None, "No media found"
-
-            return media, None
-
-    except Exception as e:
-        return None, str(e)
+    return Aotpyurl
 
 
-@app.route("/")
-def home():
-    return jsonify({
-        "status": "online",
-        "endpoint": "/Tobi",
-        "usage": "/Tobi?url=INSTAGRAM_URL",
-        "admin_contact": ADMIN,
-        "website": WEBSITE,
-        "credits": CREDITS
-    })
+@app.route("/api/yt", methods=["GET"])
+def Aotpy_api():
+    Aotpylink = request.args.get("link")
 
-
-@app.route("/Tobi")
-def tobi():
-    url = request.args.get("url")
-
-    if not url:
-        return jsonify({
-            "success": False,
-            "error": "Missing url",
-            "admin_contact": ADMIN,
-            "website": WEBSITE
+    if not Aotpylink:
+        return Aotpyijson({
+            "status": 0,
+            "error": "Missing link parameter"
         }), 400
 
-    media, error = fetch_instagram(url)
+    Aotpypayload = {
+        "url": "/media/parse",
+        "data": {
+            "origin": "source",
+            "link": Aotpylink
+        },
+        "token": ""
+    }
 
-    if error:
-        return jsonify({
-            "success": False,
-            "error": error,
-            "admin_contact": ADMIN,
-            "website": WEBSITE
+    Aotpyheaders = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android)",
+        "Accept": "*/*",
+        "Content-Type": "application/json",
+        "Origin": "https://vidssave.com",
+        "Referer": "https://vidssave.com/yt"
+    }
+
+    try:
+        Aotpysession = Aotpyr.Session()
+        Aotpysession.get("https://vidssave.com/yt", headers=Aotpyheaders)
+        Aotpyres = Aotpysession.post(
+            "https://vidssave.com/api/proxy",
+            headers=Aotpyheaders,
+            json=Aotpypayload,
+            timeout=20
+        )
+
+        Aotpydata = Aotpyres.json()
+
+        if Aotpydata.get("status") != 1:
+            return Aotpyijson({
+                "status": 0,
+                "error": "Invalid response from source"
+            }), 500
+
+        Aotpyinfo = Aotpydata["data"]
+        Aotpyout = []
+
+        Aotpythumb = Aotpyinfo.get("thumbnail")
+        Aotpythumb = Aotpy_shorten_url(Aotpythumb)
+
+        for Aotpyrsc in Aotpyinfo.get("resources", []):
+            if Aotpyrsc.get("download_mode") == "check_download":
+                Aotpyout.append({
+                    "quality": Aotpyrsc.get("quality"),
+                    "format": Aotpyrsc.get("format"),
+                    "size": Aotpyrsc.get("size"),
+                    "download": Aotpy_shorten_url(Aotpyrsc.get("download_url"))
+                })
+
+        return Aotpyijson({
+            "status": 1,
+            "response": {
+                "title": Aotpyinfo.get("title"),
+                "duration": Aotpyinfo.get("duration"),
+                "thumbnail": Aotpythumb,
+                "data": Aotpyout
+            }
+        })
+
+    except Exception as Aotpye:
+        return Aotpyijson({
+            "status": 0,
+            "error": str(Aotpye)
         }), 500
 
-    return jsonify({
-        "success": True,
-        "count": len(media),
-        "media": media,
-        "credits": CREDITS,
-        "admin_contact": ADMIN,
-        "website": WEBSITE
-    })
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
